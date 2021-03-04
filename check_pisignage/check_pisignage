@@ -1,0 +1,206 @@
+#!/usr/bin/python3
+# 2021 Erik Meitner Williamson Street Grocery Co-op
+#
+
+import argparse
+import requests
+import json
+import logging
+
+from pprint import pprint
+
+
+nagios_return_codes = {
+  'OK':0
+  ,'WARNING':1
+  ,'CRITICAL':2
+  ,'UNKNOWN':3
+}
+
+uptime_threshhold_default = '1:5'
+disk_threshhold_default = '85:90'
+temp_threshhold_default = '70:85'
+
+##
+#
+##
+def get_auth_token(user,password):
+  url = 'https://{}.pisignage.com:443/api/session'.format(user)
+  data = '{{"email":"{}","password":"{}","getToken":true}}'.format(user,password)
+  headers = {
+    'accept': 'application/json'
+    ,'Content-Type': 'application/json'
+    }
+  try:
+    r = requests.post(url, data=data, headers=headers)
+  except Exception as e:
+      logging.warn(e)
+      return False
+
+  if r.status_code != 200:
+    logging.warn('Server unable to service request. HTTP response code: {} '.format(r.status_code))
+    return False
+  session = json.loads( r.content )
+  logging.debug('session={}'.format(session))
+  token = session['token']
+  return token
+
+##
+#
+##
+def get_player_status(user, token,device):
+  url = 'https://{}.pisignage.com:443/api/players?string={}'.format(user,device)
+  headers = {
+    'accept': 'application/json'
+    ,'x-access-token': token
+    }
+  try:
+    r = requests.get(url, headers=headers)
+  except Exception as e:
+      logging.warn(e)
+      return False
+
+  if r.status_code != 200:
+    logging.warn('Server unable to service request. HTTP response code: {} '.format(r.status_code))
+    return False
+  status = json.loads( r.content )
+  return status
+
+##
+#
+##
+def process_device_status(data,threshholds):
+  d = data['data']['objects']
+  if len( d ) == 0:
+    return ['UNKNOWN','Remote API returned no data on device.']
+  state='OK'
+  msg=''
+
+  d = d[0]
+  if d['isConnected'] == False:
+    state = 'CRITICAL'
+    msg += 'Device is disconnected from service. '
+
+  uptime_wth = int(threshholds['uptime'].split(':')[0])
+  uptime_cth = int(threshholds['uptime'].split(':')[1])
+  ut = int(float(d['uptime']))/60
+  if ut < uptime_cth:
+    state = 'CRITICAL'
+    msg += 'Uptime is very low: {} min. '.format(ut)
+  elif ut < uptime_wth:
+    if state != 'CRITICAL': state = 'WARNING'
+    msg += 'Uptime is low: {} min. '.format(ut)
+
+  disk_wth = int(threshholds['disk'].split(':')[0])
+  disk_cth = int(threshholds['disk'].split(':')[1])
+  disk_l = d['diskSpaceUsed'].split('%')
+  if len(disk_l) > 0:
+    disk_use = int(disk_l[0])
+    if disk_use > disk_cth:
+      state = 'CRITICAL'
+      msg += 'Disk space is critically low: {}% used. ' .format(disk_use)
+    elif disk_use > disk_wth:
+      if state != 'CRITICAL': state = 'WARNING'
+      msg += 'Disk space is getting low: {}% used. ' .format(disk_use)
+  else:
+      if state != 'CRITICAL': state = 'UNKNOWN'
+      msg += 'Disk space data is missing or unreadable. '
+
+  temp_wth = int(threshholds['temp'].split(':')[0])
+  temp_cth = int(threshholds['temp'].split(':')[1])
+  temp_l = d['piTemperature'].split("'")
+  if len( temp_l) > 0 :
+    temp = int(float(temp_l[0]))
+    if temp > temp_cth:
+      state = 'ERROR'
+      msg += 'Device temperature is critical: {}C. '.format(temp)
+    elif temp > temp_wth:
+      if state != 'CRITICAL': state = 'WARNING'
+      msg += 'Device temperature is high: {}C. '.format(temp)
+  else:
+    if state != 'CRITICAL': state = 'UNKNOWN'
+    msg  += 'Temperature data is missing or unreadable. '
+
+  return [state,msg]
+
+
+##
+#
+##
+def main():
+
+  log_setup = {
+    'format': '%(asctime)s [%(levelname)s] %(message)s',
+    'level' : 'WARNING',
+  }
+
+  logging.basicConfig(**log_setup)
+
+  parser_desc="Nagios plugin to check PiSignage.com device status"
+
+  parser = argparse.ArgumentParser(description=parser_desc)
+
+  parser_au = parser.add_argument_group('Authentication')
+  parser_au.add_argument('-u', '--user', action='store', help='User name for PiSignage account',required=True)
+  parser_au.add_argument('-p', '--password', action='store', help='Password for PiSignage account',required=True)
+  parser_pl = parser.add_argument_group('Player device options')
+  parser_pl.add_argument('-d', '--device', action='store', help='Name of device to check',required=True)
+  parser_ch = parser.add_argument_group('Device check options')
+  parser_ch.add_argument('-t', '--uptime', action='store', help='Uptime threshholds. In minutes. W:C',required=False,default=uptime_threshhold_default)
+  parser_ch.add_argument('-k', '--disk-space', action='store', help='Disk space threshholds. In gigabytes. W:C',required=False,default=disk_threshhold_default)
+  parser_ch.add_argument('-f', '--temperature', action='store', help='Temperature threshholds. In Celsius. W:C',required=False,default=temp_threshhold_default)
+
+  parser_lg = parser.add_argument_group('Logging')
+  parser_lg.add_argument('-l', '--log-level', action='store', help='Verbosity of logging',required=False,default='warn',choices=['warning','info','debug'])
+  parser_mi = parser.add_argument_group('Misc hackery')
+  parser_mi.add_argument('-s', '--session-token', action='store', help='Session token to use',required=False)
+
+  kwargs = vars(parser.parse_args())
+  user = kwargs.get('user',None)
+  password = kwargs.get('password',None)
+  device = kwargs.get('device',None)
+  uptime_th = kwargs.get('uptime',None)
+  disk_th = kwargs.get('disk_space',None)
+  temp_th = kwargs.get('temperature',None)
+  token = kwargs.get('session_token',None)
+  log_level = kwargs.get('log_level',None).upper()
+
+  logging.getLogger().setLevel(log_level)
+
+  logging.info('Starting ...')
+
+  logging.info('Using uptime threshholds: {}'.format(uptime_th))
+  logging.info('Using disk threshholds: {}'.format(disk_th))
+  logging.info('Using temp threshholds: {}'.format(temp_th))
+
+  threshholds = {'temp':temp_th,'disk':disk_th,'uptime':uptime_th}
+
+  if not token:
+    logging.info('Logging in...')
+    token = get_auth_token(user,password)
+
+  if not token:
+    print('UNKNOWN Unable to log in to API')
+    exit( nagios_return_codes['UNKNOWN'] )
+
+  logging.debug('token={}'.format(token))
+
+  status_data = get_player_status(user, token, device)
+  logging.debug('status_data={}'.format(status_data))
+
+  if not status_data:
+    print('UNKNOWN Unable to get device status from API.')
+    exit( nagios_return_codes['UNKNOWN'] )
+
+
+  (state,status_msg)=process_device_status(status_data,threshholds)
+  logging.debug('state={}, status_msg={}'.format(state,status_msg))
+
+  print('{} {}'.format(state,status_msg))
+  exit( nagios_return_codes[state] )
+
+##
+#
+##
+if __name__ == '__main__':
+  main()
