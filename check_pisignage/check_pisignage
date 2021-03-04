@@ -17,9 +17,9 @@ nagios_return_codes = {
   ,'UNKNOWN':3
 }
 
-uptime_threshhold_default = '1:5'
-disk_threshhold_default = '85:90'
-temp_threshhold_default = '70:85'
+uptime_threshold_default = '1:5'
+disk_threshold_default = '85:90'
+temp_threshold_default = '70:85'
 
 ##
 #
@@ -69,7 +69,7 @@ def get_player_status(user, token,device):
 ##
 #
 ##
-def process_device_status(data,threshholds):
+def process_device_status(data,thresholds):
   d = data['data']['objects']
   if len( d ) == 0:
     return ['UNKNOWN','Remote API returned no data on device.']
@@ -81,8 +81,8 @@ def process_device_status(data,threshholds):
     state = 'CRITICAL'
     msg += 'Device is disconnected from service. '
 
-  uptime_wth = int(threshholds['uptime'].split(':')[0])
-  uptime_cth = int(threshholds['uptime'].split(':')[1])
+  uptime_wth = int(thresholds['uptime'].split(':')[0])
+  uptime_cth = int(thresholds['uptime'].split(':')[1])
   ut = int(float(d['uptime']))/60
   if ut < uptime_cth:
     state = 'CRITICAL'
@@ -91,8 +91,8 @@ def process_device_status(data,threshholds):
     if state != 'CRITICAL': state = 'WARNING'
     msg += 'Uptime is low: {} min. '.format(ut)
 
-  disk_wth = int(threshholds['disk'].split(':')[0])
-  disk_cth = int(threshholds['disk'].split(':')[1])
+  disk_wth = int(thresholds['disk'].split(':')[0])
+  disk_cth = int(thresholds['disk'].split(':')[1])
   disk_l = d['diskSpaceUsed'].split('%')
   if len(disk_l) > 0:
     disk_use = int(disk_l[0])
@@ -106,8 +106,8 @@ def process_device_status(data,threshholds):
       if state != 'CRITICAL': state = 'UNKNOWN'
       msg += 'Disk space data is missing or unreadable. '
 
-  temp_wth = int(threshholds['temp'].split(':')[0])
-  temp_cth = int(threshholds['temp'].split(':')[1])
+  temp_wth = int(thresholds['temp'].split(':')[0])
+  temp_cth = int(thresholds['temp'].split(':')[1])
   temp_l = d['piTemperature'].split("'")
   if len( temp_l) > 0 :
     temp = int(float(temp_l[0]))
@@ -146,9 +146,9 @@ def main():
   parser_pl = parser.add_argument_group('Player device options')
   parser_pl.add_argument('-d', '--device', action='store', help='Name of device to check',required=True)
   parser_ch = parser.add_argument_group('Device check options')
-  parser_ch.add_argument('-t', '--uptime', action='store', help='Uptime threshholds. In minutes. W:C',required=False,default=uptime_threshhold_default)
-  parser_ch.add_argument('-k', '--disk-space', action='store', help='Disk space threshholds. In gigabytes. W:C',required=False,default=disk_threshhold_default)
-  parser_ch.add_argument('-f', '--temperature', action='store', help='Temperature threshholds. In Celsius. W:C',required=False,default=temp_threshhold_default)
+  parser_ch.add_argument('-t', '--uptime', action='store', help='Uptime thresholds. In minutes. W:C',required=False,default=uptime_threshold_default)
+  parser_ch.add_argument('-k', '--disk-space', action='store', help='Disk space thresholds. In gigabytes. W:C',required=False,default=disk_threshold_default)
+  parser_ch.add_argument('-f', '--temperature', action='store', help='Temperature thresholds. In Celsius. W:C',required=False,default=temp_threshold_default)
 
   parser_lg = parser.add_argument_group('Logging')
   parser_lg.add_argument('-l', '--log-level', action='store', help='Verbosity of logging',required=False,default='warn',choices=['warning','info','debug'])
@@ -169,11 +169,11 @@ def main():
 
   logging.info('Starting ...')
 
-  logging.info('Using uptime threshholds: {}'.format(uptime_th))
-  logging.info('Using disk threshholds: {}'.format(disk_th))
-  logging.info('Using temp threshholds: {}'.format(temp_th))
+  logging.info('Using uptime thresholds: {}'.format(uptime_th))
+  logging.info('Using disk thresholds: {}'.format(disk_th))
+  logging.info('Using temp thresholds: {}'.format(temp_th))
 
-  threshholds = {'temp':temp_th,'disk':disk_th,'uptime':uptime_th}
+  thresholds = {'temp':temp_th,'disk':disk_th,'uptime':uptime_th}
 
   if not token:
     logging.info('Logging in...')
@@ -193,7 +193,7 @@ def main():
     exit( nagios_return_codes['UNKNOWN'] )
 
 
-  (state,status_msg)=process_device_status(status_data,threshholds)
+  (state,status_msg)=process_device_status(status_data,thresholds)
   logging.debug('state={}, status_msg={}'.format(state,status_msg))
 
   print('{} {}'.format(state,status_msg))
