@@ -17,9 +17,9 @@ nagios_return_codes = {
   ,'UNKNOWN':3
 }
 
-uptime_threshold_default = '1:5'
-disk_threshold_default = '85:90'
-temp_threshold_default = '70:85'
+uptime_threshold_default = '1:5' # minutes
+disk_threshold_default = '85:90' # % used
+temp_threshold_default = '70:85' # degrees Celsius
 
 ##
 #
@@ -73,6 +73,7 @@ def process_device_status(data,thresholds):
   d = data['data']['objects']
   if len( d ) == 0:
     return ['UNKNOWN','Remote API returned no data on device.']
+
   state='OK'
   msg=''
 
@@ -136,15 +137,17 @@ def main():
 
   logging.basicConfig(**log_setup)
 
-  parser_desc="Nagios plugin to check PiSignage.com device status"
+  parser_desc = "Nagios plugin to check PiSignage.com device status"
 
   parser = argparse.ArgumentParser(description=parser_desc)
 
   parser_au = parser.add_argument_group('Authentication')
   parser_au.add_argument('-u', '--user', action='store', help='User name for PiSignage account',required=True)
   parser_au.add_argument('-p', '--password', action='store', help='Password for PiSignage account',required=True)
+
   parser_pl = parser.add_argument_group('Player device options')
   parser_pl.add_argument('-d', '--device', action='store', help='Name of device to check',required=True)
+
   parser_ch = parser.add_argument_group('Device check options')
   parser_ch.add_argument('-t', '--uptime', action='store', help='Uptime thresholds. In minutes. W:C',required=False,default=uptime_threshold_default)
   parser_ch.add_argument('-k', '--disk-space', action='store', help='Disk space thresholds. In gigabytes. W:C',required=False,default=disk_threshold_default)
@@ -152,17 +155,18 @@ def main():
 
   parser_lg = parser.add_argument_group('Logging')
   parser_lg.add_argument('-l', '--log-level', action='store', help='Verbosity of logging',required=False,default='warn',choices=['warning','info','debug'])
+
   parser_mi = parser.add_argument_group('Misc hackery')
   parser_mi.add_argument('-s', '--session-token', action='store', help='Session token to use',required=False)
 
-  kwargs = vars(parser.parse_args())
-  user = kwargs.get('user',None)
-  password = kwargs.get('password',None)
-  device = kwargs.get('device',None)
+  kwargs    = vars(parser.parse_args())
+  user      = kwargs.get('user',None)
+  password  = kwargs.get('password',None)
+  device    = kwargs.get('device',None)
   uptime_th = kwargs.get('uptime',None)
-  disk_th = kwargs.get('disk_space',None)
-  temp_th = kwargs.get('temperature',None)
-  token = kwargs.get('session_token',None)
+  disk_th   = kwargs.get('disk_space',None)
+  temp_th   = kwargs.get('temperature',None)
+  token     = kwargs.get('session_token',None)
   log_level = kwargs.get('log_level',None).upper()
 
   logging.getLogger().setLevel(log_level)
@@ -193,7 +197,7 @@ def main():
     exit( nagios_return_codes['UNKNOWN'] )
 
 
-  (state,status_msg)=process_device_status(status_data,thresholds)
+  (state,status_msg) = process_device_status(status_data,thresholds)
   logging.debug('state={}, status_msg={}'.format(state,status_msg))
 
   print('{} {}'.format(state,status_msg))
