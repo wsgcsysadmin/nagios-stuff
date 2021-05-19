@@ -84,43 +84,52 @@ def process_device_status(data,thresholds):
 
   uptime_wth = int(thresholds['uptime'].split(':')[0])
   uptime_cth = int(thresholds['uptime'].split(':')[1])
-  ut = int(float(d['uptime']))/60
-  if ut < uptime_cth:
-    state = 'CRITICAL'
-    msg += 'Uptime is very low: {} min. '.format(ut)
-  elif ut < uptime_wth:
-    if state != 'CRITICAL': state = 'WARNING'
-    msg += 'Uptime is low: {} min. '.format(ut)
+  if 'uptime' not in d.keys():
+      logging.debug('Uptime data not available.')
+  else:
+      ut = int(float(d['uptime']))/60
+      if ut < uptime_cth:
+        state = 'CRITICAL'
+        msg += 'Uptime is very low: {} min. '.format(ut)
+      elif ut < uptime_wth:
+        if state != 'CRITICAL': state = 'WARNING'
+        msg += 'Uptime is low: {} min. '.format(ut)
 
   disk_wth = int(thresholds['disk'].split(':')[0])
   disk_cth = int(thresholds['disk'].split(':')[1])
-  disk_l = d['diskSpaceUsed'].split('%')
-  if len(disk_l) > 0:
-    disk_use = int(disk_l[0])
-    if disk_use > disk_cth:
-      state = 'CRITICAL'
-      msg += 'Disk space is critically low: {}% used. ' .format(disk_use)
-    elif disk_use > disk_wth:
-      if state != 'CRITICAL': state = 'WARNING'
-      msg += 'Disk space is getting low: {}% used. ' .format(disk_use)
+  if 'diskSpaceUsed' not in d.keys():
+      logging.debug('Disk space data not available.')
   else:
-      if state != 'CRITICAL': state = 'UNKNOWN'
-      msg += 'Disk space data is missing or unreadable. '
+      disk_l = d['diskSpaceUsed'].split('%')
+      if len(disk_l) > 0:
+        disk_use = int(disk_l[0])
+        if disk_use > disk_cth:
+          state = 'CRITICAL'
+          msg += 'Disk space is critically low: {}% used. ' .format(disk_use)
+        elif disk_use > disk_wth:
+          if state != 'CRITICAL': state = 'WARNING'
+          msg += 'Disk space is getting low: {}% used. ' .format(disk_use)
+      else:
+          if state != 'CRITICAL': state = 'UNKNOWN'
+          msg += 'Disk space data is missing or unreadable. '
 
   temp_wth = int(thresholds['temp'].split(':')[0])
   temp_cth = int(thresholds['temp'].split(':')[1])
-  temp_l = d['piTemperature'].split("'")
-  if len( temp_l) > 0 :
-    temp = int(float(temp_l[0]))
-    if temp > temp_cth:
-      state = 'ERROR'
-      msg += 'Device temperature is critical: {}C. '.format(temp)
-    elif temp > temp_wth:
-      if state != 'CRITICAL': state = 'WARNING'
-      msg += 'Device temperature is high: {}C. '.format(temp)
+  if 'piTemperature' not in d.keys():
+      logging.debug('Temperature data not available.')
   else:
-    if state != 'CRITICAL': state = 'UNKNOWN'
-    msg  += 'Temperature data is missing or unreadable. '
+      temp_l = d['piTemperature'].split("'")
+      if len( temp_l) > 0 :
+        temp = int(float(temp_l[0]))
+        if temp > temp_cth:
+          state = 'ERROR'
+          msg += 'Device temperature is critical: {}C. '.format(temp)
+        elif temp > temp_wth:
+          if state != 'CRITICAL': state = 'WARNING'
+          msg += 'Device temperature is high: {}C. '.format(temp)
+      else:
+        if state != 'CRITICAL': state = 'UNKNOWN'
+        msg  += 'Temperature data is missing or unreadable. '
 
   return [state,msg]
 
