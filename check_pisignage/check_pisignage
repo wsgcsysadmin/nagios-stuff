@@ -95,23 +95,26 @@ def process_device_status(data,thresholds):
         if state != 'CRITICAL': state = 'WARNING'
         msg += 'Uptime is low: {} min. '.format(ut)
 
-  disk_wth = int(thresholds['disk'].split(':')[0])
-  disk_cth = int(thresholds['disk'].split(':')[1])
-  if 'diskSpaceUsed' not in d.keys():
-      logging.debug('Disk space data not available.')
-  else:
-      disk_l = d['diskSpaceUsed'].split('%')
-      if len(disk_l) > 0:
-        disk_use = int(disk_l[0])
-        if disk_use > disk_cth:
-          state = 'CRITICAL'
-          msg += 'Disk space is critically low: {}% used. ' .format(disk_use)
-        elif disk_use > disk_wth:
-          if state != 'CRITICAL': state = 'WARNING'
-          msg += 'Disk space is getting low: {}% used. ' .format(disk_use)
+  # The Chrome OS App reports disk usage  in differing formats or not at all depending
+  # on the OS version.  Ignore it.
+  if 'platform_version' in d.keys() and 'cros' not in d['platform_version'].split(','):
+      disk_wth = int(thresholds['disk'].split(':')[0])
+      disk_cth = int(thresholds['disk'].split(':')[1])
+      if 'diskSpaceUsed' not in d.keys():
+          logging.debug('Disk space data not available.')
       else:
-          if state != 'CRITICAL': state = 'UNKNOWN'
-          msg += 'Disk space data is missing or unreadable. '
+          disk_l = d['diskSpaceUsed'].split('%')
+          if len(disk_l) > 0:
+            disk_use = int(disk_l[0])
+            if disk_use > disk_cth:
+              state = 'CRITICAL'
+              msg += 'Disk space is critically low: {}% used. ' .format(disk_use)
+            elif disk_use > disk_wth:
+              if state != 'CRITICAL': state = 'WARNING'
+              msg += 'Disk space is getting low: {}% used. ' .format(disk_use)
+          else:
+              if state != 'CRITICAL': state = 'UNKNOWN'
+              msg += 'Disk space data is missing or unreadable. '
 
   temp_wth = int(thresholds['temp'].split(':')[0])
   temp_cth = int(thresholds['temp'].split(':')[1])
