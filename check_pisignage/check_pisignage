@@ -63,6 +63,7 @@ def get_player_status(user, token,device):
   if r.status_code != 200:
     logging.warn('Server unable to service request. HTTP response code: {} '.format(r.status_code))
     return False
+  logging.debug('json={}'.format(r.content))  
   status = json.loads( r.content )
   return status
 
@@ -202,7 +203,6 @@ def main():
   logging.debug('token={}'.format(token))
 
   status_data = get_player_status(user, token, device)
-  logging.debug('status_data={}'.format(status_data))
 
   if not status_data:
     print('UNKNOWN Unable to get device status from API.')
